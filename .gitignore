@@ -147,3 +147,4 @@ cert.key
 *.crt
 *.key
 
+main.py

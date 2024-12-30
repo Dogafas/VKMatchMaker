@@ -1,7 +1,7 @@
 # test_db.py
 import psycopg2
 import logging
-from toolkit import get_db_connection_params
+from tests.toolkit import get_db_connection_params
 
 # Настройка логгирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -41,7 +41,8 @@ def test_db_connection():
         logging.error(f"Ошибка подключения к PostgreSQL: {e}")
         return False
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
+def print_db_status():
     if test_db_connection():
         print("Тест подключения к базе данных пройден!")
     else:
