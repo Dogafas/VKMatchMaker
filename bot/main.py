@@ -21,19 +21,19 @@ user_search_params = {}
 user_search_results = {}
 
 def get_user_info(user_id):
-    """Получает информацию о пользователе и его фотографии."""
+    """Получает информацию о пользователе, его фотографии и лайки к ним."""
     vk_session = vk_api.VkApi(token=TOKEN)
     vk = vk_session.get_api()
     try:
-        # Получаем основную информацию о пользователе, включая город
+        # Получаем основную информацию о пользователе
         user = vk.users.get(user_ids=user_id, fields="photo_max_orig,city")[0]
         first_name = user["first_name"]
         last_name = user["last_name"]
         profile_url = f"vk.com/id{user_id}"
         photo_url = user["photo_max_orig"]
         city_id = user.get("city", {}).get("id")
-        logging.info(f"Получен city_id: {city_id}") 
-        # Получаем название города
+        logging.info(f"Получен city_id: {city_id}")
+         # Получаем название города
         city_name = "Не указан"
         if "city" in user:
             city_id = user["city"]["id"]
@@ -41,25 +41,47 @@ def get_user_info(user_id):
             if city_info:
                 city_name = city_info[0]["title"]
 
-        # Получаем фотографии пользователя
-        photos = vk.photos.get(owner_id=user_id, album_id="profile", count=3)
-        attachments = []
-        for photo in photos["items"]:
-            attachments.append(f"photo{photo['owner_id']}_{photo['id']}")
+        # Получаем все фотографии пользователя из альбома 'profile'
+        all_photos = vk.photos.get(owner_id=user_id, album_id="profile", extended=1) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (добавил extended=1)
+        if all_photos.get('items'): # <-ЗДЕСЬ ИЗМЕНЕНИЯ (добавил проверку наличия фото)
+            photos_with_likes = [] # <-ЗДЕСЬ ИЗМЕНЕНИЯ (инициализируем список)
+            for photo in all_photos["items"]: # <-ЗДЕСЬ ИЗМЕНЕНИЯ (перебираем все фото)
+                likes_info = vk.likes.getList(type="photo", owner_id=photo["owner_id"], item_id=photo["id"])  # <-ЗДЕСЬ ИЗМЕНЕНИЯ (получаем лайки)
+                likes_count = likes_info['count'] # <-ЗДЕСЬ ИЗМЕНЕНИЯ (считаем количество лайков)
+                photos_with_likes.append({ # <-ЗДЕСЬ ИЗМЕНЕНИЯ (добавляем словарь с информацией о фото и лайках)
+                    "attachment": f"photo{photo['owner_id']}_{photo['id']}",
+                    "likes": likes_count
+                })
+            
+            # Сортируем фотографии по количеству лайков (убывание)
+            sorted_photos = sorted(photos_with_likes, key=lambda x: x["likes"], reverse=True) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сортируем фотографии по лайкам)
+            
+            # Берем топ-3 фотографии
+            top_photos = [item["attachment"] for item in sorted_photos[:3]] # <-ЗДЕСЬ ИЗМЕНЕНИЯ (берем топ 3 фото)
+        
+            return {
+                "first_name": first_name,
+                "last_name": last_name,
+                "profile_url": profile_url,
+                "photo_url": photo_url,
+                "city": city_name,
+                "city_id": city_id,
+                "attachments": top_photos, # <-ЗДЕСЬ ИЗМЕНЕНИЯ (возвращаем топ 3 фото)
+            }
+        else: # <-ЗДЕСЬ ИЗМЕНЕНИЯ (если фото нет, то возвращаем информацию без фото)
+            return {
+                "first_name": first_name,
+                "last_name": last_name,
+                "profile_url": profile_url,
+                "photo_url": photo_url,
+                "city": city_name,
+                "city_id": city_id,
+                "attachments": [],
+            }
 
-        return {
-            "first_name": first_name,
-            "last_name": last_name,
-            "profile_url": profile_url,
-            "photo_url": photo_url,
-            "city": city_name,
-            "city_id": city_id,
-            "attachments": attachments,
-        }
     except vk_api.exceptions.ApiError as error:
-        logging.error(f"Произошла ошибка: {error}")  
+        logging.error(f"Произошла ошибка: {error}")
         return None
-
 
 def send_message_from_group(user_id, message, attachments=None, keyboard=None):
     """Отправляет сообщение пользователю от имени сообщества."""
@@ -174,15 +196,17 @@ def handle_message(event, vk):
                        }
                        user = users[0]
                        if isinstance(user, dict):
-                            if "first_name" in user and "last_name" in user and "id" in user:
+                            found_user_info = get_user_info(user["id"]) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (получаем информацию о пользователе)
+                            if found_user_info: # <-ЗДЕСЬ ИЗМЕНЕНИЯ (проверка что данные получены)
                                 message = (
-                                    f"{user['first_name']} {user['last_name']}\n"
+                                    f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
                                     f"vk.com/id{user['id']}\n"
-                                 )
-                                send_message_from_group(user_id, message, keyboard=get_next_prev_keyboard())
+                                    f"Город: {found_user_info['city']}\n" # <-ЗДЕСЬ ИЗМЕНЕНИЯ (добавляем город)
+                                )
+                                send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_prev_keyboard()) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (передаем фото)
                             else:
-                                logging.warning(f"У пользователя {user.get('id', 'неизвестен')} отсутствуют необходимые данные")  
-                                send_message_from_group(user_id, f"У пользователя {user.get('id', 'неизвестен')} отсутствуют необходимые данные", keyboard=None)
+                               logging.warning(f"Не удалось получить данные о пользователе: {user.get('id', 'неизвестен')}")  
+                               send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {user.get('id', 'неизвестен')} ", keyboard=None)
                        else:
                            logging.warning(f"Не удалось получить данные о пользователе: {user}")
                            send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {user}", keyboard=None)
@@ -200,21 +224,23 @@ def handle_message(event, vk):
                         user_search_results[user_id]["current_index"] = current_index
                         user = results[current_index]
                         if isinstance(user, dict):
-                            if "first_name" in user and "last_name" in user and "id" in user:
+                            found_user_info = get_user_info(user["id"]) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (получаем информацию о пользователе)
+                            if found_user_info:  # <-ЗДЕСЬ ИЗМЕНЕНИЯ (проверка что данные получены)
                                 message = (
-                                    f"{user['first_name']} {user['last_name']}\n"
+                                    f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
                                     f"vk.com/id{user['id']}\n"
+                                    f"Город: {found_user_info['city']}\n"  # <-ЗДЕСЬ ИЗМЕНЕНИЯ (добавляем город)
                                 )
-                                send_message_from_group(user_id, message, keyboard=get_next_prev_keyboard())
+                                send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_prev_keyboard())# <-ЗДЕСЬ ИЗМЕНЕНИЯ (передаем фото)
                             else:
-                                logging.warning(f"У пользователя {user.get('id', 'неизвестен')} отсутствуют необходимые данные")  
-                                send_message_from_group(user_id, f"У пользователя {user.get('id', 'неизвестен')} отсутствуют необходимые данные", keyboard=None)
+                                logging.warning(f"Не удалось получить данные о пользователе: {user.get('id', 'неизвестен')}")  
+                                send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {user.get('id', 'неизвестен')}", keyboard=None)
                         else:
                             logging.warning(f"Не удалось получить данные о пользователе: {user}") 
                             send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {user}", keyboard=None)
                     
                     else:
-                         send_message_from_group(user_id, "Нет результатов поиска, начните заново", keyboard=None)
+                         send_message_from_group(user_id, "Нет результатов поиска, начните заново (напишите: Начать)", keyboard=None)
                 else:
                     send_message_from_group(user_id, "Неизвестная команда.", keyboard=None)
             except json.JSONDecodeError:
@@ -222,7 +248,7 @@ def handle_message(event, vk):
                  send_message_from_group(user_id, "Ошибка в payload.", keyboard=None)
         
             
-        if message_text.lower() == "начать": # <-ЗДЕСЬ ИЗМЕНЕНИЯ (набор от пользователя в любом регистре)
+        if message_text.lower() == "начать":
                 logging.info("Обработка сообщения 'Начать'...")
                 user_data = get_user_info(user_id)
                 if user_data:
@@ -230,12 +256,12 @@ def handle_message(event, vk):
                         f"Привет, {user_data['first_name']} {user_data['last_name']}!\n"
                         f"Твой профиль: {user_data['profile_url']}\n"
                         f"Твой город: {user_data['city']}\n"
-                        f"Хочешь продолжить?"
+                        f"Хочешь продолжить, жми ДА или НЕТ ?"
                     )
                     keyboard = get_yes_no_keyboard()
                     logging.info("Отправка приветственного сообщения с клавиатурой...")  
                     send_message_from_group(user_id, message, user_data["attachments"], keyboard=keyboard)
-                
+
 
 if __name__ == '__main__':
     vk_session = vk_api.VkApi(token=GROUP_TOKEN)
