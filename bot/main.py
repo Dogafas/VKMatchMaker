@@ -2,7 +2,6 @@ import vk_api
 from dotenv import load_dotenv
 import os
 import json
-import time
 import logging 
 from vk_api.longpoll import VkLongPoll, VkEventType
 from keyboards import get_sex_keyboard, get_age_keyboard, get_next_prev_keyboard, get_yes_no_keyboard
@@ -223,7 +222,7 @@ def handle_message(event, vk):
                  send_message_from_group(user_id, "Ошибка в payload.", keyboard=None)
         
             
-        if message_text == "Начать":
+        if message_text.lower() == "начать": # <-ЗДЕСЬ ИЗМЕНЕНИЯ (набор от пользователя в любом регистре)
                 logging.info("Обработка сообщения 'Начать'...")
                 user_data = get_user_info(user_id)
                 if user_data:
