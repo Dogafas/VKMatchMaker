@@ -15,19 +15,6 @@ from datetime import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import asyncio
-from bot.db_requests import (
-    set_user,
-    get_user,
-    delete_user,
-    add_user_to_blacklist,
-    remove_user_from_blacklist,
-    get_user_blacklist,
-    add_user_to_favourites,
-    remove_user_from_favourites,
-    get_user_favourites,
-    search_users_data
-)
 
 load_dotenv()
 
@@ -202,7 +189,7 @@ def search_users(user_id, offset=0, count=1):
         return None
 
 
-async def handle_message(event, vk):
+def handle_message(event, vk):
     """Обрабатывает входящие сообщения и отвечает на нажатия кнопок."""
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
         user_id = event.user_id
@@ -387,50 +374,14 @@ async def handle_message(event, vk):
         if message_text.lower() == "начать":
             logging.info("Обработка сообщения 'Начать'...")
             user_data = get_user_info(user_id)
-            
-            """Добавление в базу данных"""
-            try:
-                if len(user_data["attachments"]) > 0:
-                    print(
-                        await set_user(
-                            **{
-                                "vk_id": user_id,
-                                "name": user_data["first_name"],
-                                "surname": user_data["last_name"],
-                                "age": user_data["age"],
-                                "city": user_data["city"],
-                                "profile_url": user_data["profile_url"],
-                                "photo_1": user_data["attachments"][0],
-                                "photo_2": user_data["attachments"][1],
-                                "photo_3": user_data["attachments"][2],
-                            }
-                        )
-                    )  # <- Выводит "User created" если пользователя нет в базе данных и добавляет его туда. Если такой пользователь присутствует, то выводит "User already exist"
 
-                else:
-                    print(
-                        await set_user(
-                            **{
-                                "vk_id": user_id,
-                                "name": user_data["first_name"],
-                                "surname": user_data["last_name"],
-                                "age": user_data["age"],
-                                "city": user_data["city"],
-                                "profile_url": user_data["profile_url"],
-                            }
-                        )
-                    )
-            except Exception as e:
-                print(f'Возникла ошибка: {e}')
-                
-            if user_data:
-                message = (
+            message = (
                     f"Привет, {user_data['first_name']} {user_data['last_name']}!\n"
                     f"Твой профиль: {user_data['profile_url']}\n"
                     f"Твой город: {user_data['city']}\n"
                     f"Хочешь продолжить, жми ДА или НЕТ ?"
-                )
-                keyboard = get_yes_no_keyboard()
+            )
+            keyboard = get_yes_no_keyboard()
             logging.info("Отправка приветственного сообщения с клавиатурой...")
             send_message_from_group(
                 user_id, message, user_data["attachments"], keyboard=keyboard
@@ -444,7 +395,7 @@ if __name__ == "__main__":
     logging.info("Бот запущен")
     try:
         for event in longpoll.listen():
-            asyncio.run(handle_message(event, vk))
+            handle_message(event, vk)
     except Exception as e:
             logging.error(f"Бот упал с ошибкой: {e}")
     except KeyboardInterrupt:

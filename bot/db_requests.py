@@ -8,7 +8,7 @@ def set_user(user_id):
     user = session.scalar(select(User).where(User.user_id == user_id))
 
     if not user:
-        session.add(User(user_id=user_id, current_index=1))
+        session.add(User(user_id=user_id, current_index=0))
         session.commit()
         return "User created"
 
@@ -50,15 +50,23 @@ def get_user_search_params(user_id):
 
 
 def save_search_results(user_id, result_user_id, search_params_id):
-    session.add(
-        Search_Result(
-            user_id=user_id,
-            result_user_id=result_user_id,
-            search_params_id=search_params_id,
+    if_search_user = session.scalar(
+        select(Search_Result).where(
+            Search_Result.user_id == user_id,
+            Search_Result.result_user_id == result_user_id,
         )
     )
-    session.commit()
-    return "Search results saved"
+    if not if_search_user:
+        session.add(
+            Search_Result(
+                user_id=user_id,
+                result_user_id=result_user_id,
+                search_params_id=search_params_id,
+            )
+        )
+        session.commit()
+        return "Search results saved"
+    return "User already exist"
 
 
 def get_search_results(user_id):
@@ -73,13 +81,15 @@ def get_search_results(user_id):
         "search_params_id": search_results.search_params_id,
     }
 
+
 def get_user_index(user_id):
-    index = session.scalar(select(User).where(User.user_id==user_id))
+    index = session.scalar(select(User).where(User.user_id == user_id))
 
     return index.current_index
 
+
 def change_user_index(user_id, index):
-    change_index = session.scalar(select(User).where(User.user_id==user_id))
+    change_index = session.scalar(select(User).where(User.user_id == user_id))
 
     change_index.current_index = index
     session.commit()
