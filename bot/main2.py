@@ -4,8 +4,14 @@ import os
 import json
 import logging
 from vk_api.longpoll import VkLongPoll, VkEventType
-from keyboards import get_sex_keyboard, get_age_keyboard, get_next_prev_keyboard, get_yes_no_keyboard
-from database import get_user_search_params, save_user_search_params, save_search_results, get_search_results # <-ЗДЕСЬ ИЗМЕНЕНИЯ (импорт функций из database.py)
+from keyboards import get_sex_keyboard, get_age_keyboard, get_next_keyboard, get_yes_no_keyboard
+from db_requests import (set_user, 
+                        save_user_search_params, 
+                        get_user_search_params, 
+                        save_search_results, 
+                        get_search_results,
+                        get_user_index,
+                        change_user_index) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (импорт функций из database.py)
 
 load_dotenv()
 
@@ -133,7 +139,7 @@ def search_users(user_id, offset=0, count=1):
         "age_to": age_to,
         "has_photo": 1,
         "offset": offset,
-        "city": city
+        "city": city,
     }
     
       users = vk.users.search(**search_params)
@@ -165,7 +171,7 @@ def handle_message(event, vk):
                      logging.info("Отправка запроса на выбор возраста") 
                      user_data = get_user_info(user_id)  
                      if user_data and user_data.get('city_id'): 
-                        save_user_search_params(user_id, "male", None, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
+                        save_user_search_params(user_id, "male", 0, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
                         logging.info(f"Сохраненные параметры поиска: {get_user_search_params(user_id)}")  
                      else:
                            logging.warning(f"Не удалось получить ID города")  
@@ -175,7 +181,7 @@ def handle_message(event, vk):
                     logging.info("Отправка запроса на выбор возраста")  
                     user_data = get_user_info(user_id)  
                     if user_data and user_data.get('city_id'): 
-                         save_user_search_params(user_id, "female", None, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
+                         save_user_search_params(user_id, "female", 0, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
                          logging.info(f"Сохраненные параметры поиска: {get_user_search_params(user_id)}") 
                     else:
                            logging.warning(f"Не удалось получить ID города") 
@@ -201,37 +207,24 @@ def handle_message(event, vk):
                                 f"vk.com/id{users[0]['id']}\n"
                                 f"Город: {found_user_info['city']}\n" 
                            )
-                           send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_prev_keyboard())
+                           send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_keyboard())
                        else:
                            logging.warning(f"Не удалось получить данные о пользователе: {users[0].get('id', 'неизвестен')}")
                            send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {users[0].get('id', 'неизвестен')}", keyboard=None)
                     else:
                        send_message_from_group(user_id, "Не удалось найти пользователей по заданным параметрам.", keyboard=None)
-                elif button == "next" or button == "prev":
-                    results = get_search_results(user_id) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (получаем результаты из БД)
-                    if results:
-                        current_index = 0  # Начинаем с первого результата
-                        if button == "next":
-                            current_index = 1
-                        elif button == "prev":
-                            current_index = -1
-
-                        if 0 <= current_index < len(results):
-                           found_user_info = get_user_info(results[current_index])
-                           if found_user_info:
-                               message = (
-                                    f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
-                                    f"vk.com/id{results[current_index]}\n"
-                                    f"Город: {found_user_info['city']}\n"
+                elif button == "next":
+                    current_index = get_user_index(user_id)
+                    search_user_id = search_users(user_id, current_index, 1)[0]['id']
+                    found_user_info = get_user_info(search_users(user_id, current_index, 1)[0]['id'])
+                    message = (
+                                f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
+                                f"vk.com/id{search_user_id}\n"
+                                f"Город: {found_user_info['city']}\n"
                                 )
-                               send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_prev_keyboard())
-                           else:
-                                logging.warning(f"Не удалось получить данные о пользователе: {results[current_index]}")
-                                send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {results[current_index]}", keyboard=None)
-                        else:
-                             send_message_from_group(user_id, "Больше нет результатов.", keyboard=None)
-                    else:
-                         send_message_from_group(user_id, "Нет результатов поиска, начните заново (напишите: Начать)", keyboard=None)
+                    send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_keyboard())
+                    change_user_index(user_id, current_index + 1)
+        
                 else:
                     send_message_from_group(user_id, "Неизвестная команда.", keyboard=None)
             except json.JSONDecodeError:
@@ -242,6 +235,8 @@ def handle_message(event, vk):
         if message_text.lower() == "начать":
                 logging.info("Обработка сообщения 'Начать'...")
                 user_data = get_user_info(user_id)
+
+                print(set_user(user_id))
                 if user_data:
                     message = (
                         f"Привет, {user_data['first_name']} {user_data['last_name']}!\n"
@@ -258,8 +253,5 @@ if __name__ == '__main__':
     vk = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
     logging.info("Бот запущен")
-    try:
-        for event in longpoll.listen():
-            handle_message(event, vk)
-    except Exception as e:
-        logging.error(f"Бот упал с ошибкой: {e}")
+    for event in longpoll.listen():
+        handle_message(event, vk)

@@ -148,3 +148,5 @@ cert.key
 *.key
 
 main.py
+.codegpt
+old/

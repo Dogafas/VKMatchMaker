@@ -50,11 +50,10 @@ def get_age_keyboard():
     ]
     return create_keyboard(buttons)
 
-def get_next_prev_keyboard():
-    """Создает клавиатуру с кнопками 'Следующий' и 'Предыдущий'."""
+def get_next_keyboard():
+    """Создает клавиатуру с кнопкой 'Следующий'"""
     buttons = [
         [
-            create_button("Предыдущий", {"button": "prev"}, "primary"),
             create_button("Следующий", {"button": "next"}, "primary")
         ]
     ]

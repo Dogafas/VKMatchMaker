@@ -4,6 +4,18 @@ from dotenv import load_dotenv
 import os
 import json
 from vk_api.longpoll import VkLongPoll, VkEventType
+from datetime import datetime
+import asyncio
+
+from bot.db_requests import (set_user, 
+                               get_user, 
+                               delete_user, 
+                               add_user_to_blacklist, 
+                               remove_user_from_blacklist, 
+                               get_user_blacklist,
+                               add_user_to_favourites, 
+                               remove_user_from_favourites, 
+                               get_user_favourites)
 
 load_dotenv()
 
@@ -12,13 +24,20 @@ TOKEN = os.getenv("VKTOKEN")
 USER_ID = os.getenv("VKUSER")
 GROUP_TOKEN = os.getenv("VKTOKENGROUP")
 
+def calculate_age(bdate):
+    birthdate = datetime.strptime(bdate, "%d.%m.%Y")
+    today = datetime.today()
+    age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+    return age
+
 def get_user_info(user_id):
     """Получает информацию о пользователе и его фотографии."""
     vk_session = vk_api.VkApi(token=TOKEN)
     vk = vk_session.get_api()
     try:
         # Получаем основную информацию о пользователе, включая город
-        user = vk.users.get(user_ids=user_id, fields="photo_max_orig,city")[0]
+        user = vk.users.get(user_ids=user_id, fields="photo_max_orig,city, bdate")[0]
+        age = calculate_age(user['bdate'])
         first_name = user["first_name"]
         last_name = user["last_name"]
         profile_url = f"vk.com/id{user_id}"
@@ -41,6 +60,7 @@ def get_user_info(user_id):
         return {
             "first_name": first_name,
             "last_name": last_name,
+            "age": age,
             "profile_url": profile_url,
             "photo_url": photo_url,
             "city": city_name,
@@ -101,7 +121,7 @@ def send_message_from_group(user_id, message, attachments=None, keyboard=None):
             print(f"Ошибка при отправке сообщения: {error}")
 
 
-def handle_message(event, vk):
+async def handle_message(event, vk):
     """Обрабатывает входящие сообщения и отвечает на нажатия кнопок."""
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
         user_id = event.user_id
@@ -128,9 +148,22 @@ def handle_message(event, vk):
                 send_message_from_group(user_id, "Ошибка в payload.", keyboard=None)
         
             
-        if message_text == "Начать":  
+        if message_text == "Начать":
                 print("Обработка сообщения 'Начать'...") 
                 user_data = get_user_info(user_id)
+                
+                await set_user(**{
+                    "vk_id": user_id,
+                    "name": user_data['first_name'],
+                    "surname": user_data['last_name'],
+                    "age": user_data['age'],
+                    "city": user_data['city'],
+                    "profile_url": user_data['profile_url'],
+                    "photo_1": user_data['attachments'][0],
+                    "photo_2": user_data['attachments'][1],
+                    "photo_3": user_data['attachments'][2]
+                })  
+
                 if user_data:
                     message = (
                         f"Привет, {user_data['first_name']} {user_data['last_name']}!\n"
@@ -150,6 +183,6 @@ if __name__ == '__main__':
     print("Бот запущен")
     try:
         for event in longpoll.listen():
-            handle_message(event, vk)
+            asyncio.run(handle_message(event, vk))
     except Exception as e:
         print(f"Бот упал с ошибкой: {e}")
