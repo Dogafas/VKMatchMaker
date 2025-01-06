@@ -272,6 +272,14 @@ import os
 import json
 import logging
 from vk_api.longpoll import VkLongPoll, VkEventType
+from keyboards import get_sex_keyboard, get_age_keyboard, get_next_keyboard, get_yes_no_keyboard
+from db_requests import (set_user, 
+                        save_user_search_params, 
+                        get_user_search_params, 
+                        save_search_results, 
+                        get_search_results,
+                        get_user_index,
+                        change_user_index) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (импорт функций из database.py)
 from keyboards import get_sex_keyboard, get_age_keyboard, get_next_prev_keyboard, get_yes_no_keyboard
 from database import save_user, get_user_id, save_search_result, get_user_id, save_blacklisted_user, is_user_blacklisted, is_search_result_exists, update_user_offset, update_user_index, get_max_search_result_id, get_search_result_by_id
 
@@ -379,6 +387,31 @@ def search_users(user_id, offset=0, count=1):
     
     sex = None
     age_from, age_to = None, None
+    age_range = params.get("age")
+    city = params.get("city_id")
+    if age_range == "18-25":
+        age_from, age_to = 18, 25
+    elif age_range == "25-35":
+        age_from, age_to = 25, 35
+    elif age_range == "35-45":
+        age_from, age_to = 35, 45
+    elif age_range == "45+":
+        age_from = 45
+    
+    try:
+      search_params = {
+        "count": count,
+        "fields": "photo_max_orig",
+        "sex": 1 if sex == "female" else 2 if sex == "male" else 0,
+        "age_from": age_from,
+        "age_to": age_to,
+        "has_photo": 1,
+        "offset": offset,
+        "city": city,
+    }
+    
+      users = vk.users.search(**search_params)
+      return users["items"]
     age_range = None
     city = user_info.get("city_id")
     
@@ -780,6 +813,11 @@ def handle_message(event, vk):
                     logging.info("Отправка ответа на кнопку 'Нет' с клавиатурой...")
                     send_message_from_group(user_id, "Жаль, тогда в другой раз.", keyboard=None)
                 elif button == "male":
+                     logging.info("Отправка запроса на выбор возраста") 
+                     user_data = get_user_info(user_id)  
+                     if user_data and user_data.get('city_id'): 
+                        save_user_search_params(user_id, "male", 0, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
+                        logging.info(f"Сохраненные параметры поиска: {get_user_search_params(user_id)}")  
                      logging.info("Отправка запроса на выбор возраста")
                      user_data = get_user_info(user_id)
                      if user_data and user_data.get('city_id'):
@@ -790,6 +828,11 @@ def handle_message(event, vk):
                            send_message_from_group(user_id, f"Не удалось получить ID города", keyboard=None)
                      send_message_from_group(user_id, "Какой возраст предпочитаете?", keyboard=get_age_keyboard())
                 elif button == "female":
+                    logging.info("Отправка запроса на выбор возраста")  
+                    user_data = get_user_info(user_id)  
+                    if user_data and user_data.get('city_id'): 
+                         save_user_search_params(user_id, "female", 0, user_data['city_id']) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем пол в БД)
+                         logging.info(f"Сохраненные параметры поиска: {get_user_search_params(user_id)}") 
                     logging.info("Отправка запроса на выбор возраста")
                     user_data = get_user_info(user_id)
                     if user_data and user_data.get('city_id'):
@@ -807,6 +850,21 @@ def handle_message(event, vk):
 
                     users = search_users(user_id, count=1)
                     if users:
+                       search_params = get_user_search_params(user_id)
+                       for user in users:
+                        save_search_results(user_id, user["id"], user_id) # <-ЗДЕСЬ ИЗМЕНЕНИЯ (сохраняем результаты в БД)
+                       
+                       found_user_info = get_user_info(users[0]["id"])  # <-ЗДЕСЬ ИЗМЕНЕНИЯ (получаем информацию о первом пользователе)
+                       if found_user_info:
+                           message = (
+                                f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
+                                f"vk.com/id{users[0]['id']}\n"
+                                f"Город: {found_user_info['city']}\n" 
+                           )
+                           send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_keyboard())
+                       else:
+                           logging.warning(f"Не удалось получить данные о пользователе: {users[0].get('id', 'неизвестен')}")
+                           send_message_from_group(user_id, f"Не удалось получить данные о пользователе: {users[0].get('id', 'неизвестен')}", keyboard=None)
                         user_db_info = get_user_id(user_id)
                         if not user_db_info:
                            user_info = get_user_info(user_id)
@@ -843,6 +901,18 @@ def handle_message(event, vk):
                             send_message_from_group(user_id, "Нет новых анкет.", keyboard=None)
                     else:
                        send_message_from_group(user_id, "Не удалось найти пользователей по заданным параметрам.", keyboard=None)
+                elif button == "next":
+                    current_index = get_user_index(user_id)
+                    search_user_id = search_users(user_id, current_index, 1)[0]['id']
+                    found_user_info = get_user_info(search_users(user_id, current_index, 1)[0]['id'])
+                    message = (
+                                f"{found_user_info['first_name']} {found_user_info['last_name']}\n"
+                                f"vk.com/id{search_user_id}\n"
+                                f"Город: {found_user_info['city']}\n"
+                                )
+                    send_message_from_group(user_id, message, found_user_info["attachments"], keyboard=get_next_keyboard())
+                    change_user_index(user_id, current_index + 1)
+        
                 elif button == "next":
                     user_db_info = get_user_id(user_id)
                     if user_db_info:
@@ -916,6 +986,8 @@ def handle_message(event, vk):
         if message_text.lower() == "начать":
                 logging.info("Обработка сообщения 'Начать'...")
                 user_data = get_user_info(user_id)
+
+                print(set_user(user_id))
                 if user_data:
                      message = (
                         f"Привет, {user_data['first_name']} {user_data['last_name']}!\n"
@@ -934,6 +1006,8 @@ if __name__ == '__main__':
     vk = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
     logging.info("Бот запущен")
+    for event in longpoll.listen():
+        handle_message(event, vk)
     try:
         for event in longpoll.listen():
             handle_message(event, vk)
