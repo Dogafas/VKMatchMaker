@@ -73,39 +73,87 @@ def set_favorite(search_result_id):
     Устанавливает флаг favorites в True для указанного результата поиска.
     """
     logging.info(f"Начало set_favorite с search_result_id: {search_result_id}")
-
-    # Обновляем запись в таблице Search_Result
-    stmt = (
-        update(Search_Result)
-        .where(
-            (Search_Result.id == search_result_id)
+    status = session.scalar(select(Search_Result).where(Search_Result.id==search_result_id))
+    
+    if not status.favorites:
+        if status.blacklist:
+            setattr(status, "blacklist", False)
+        # Обновляем запись в таблице Search_Result
+        stmt = (
+            update(Search_Result)
+            .where(
+                (Search_Result.id == search_result_id)
+            )
+            .values(favorites=True)
         )
-        .values(favorites=True)
-    )
-    logging.info(f"SQL запрос: {stmt}")
-    session.execute(stmt)
-    session.commit()
+        logging.info(f"SQL запрос: {stmt}")
+        session.execute(stmt)
+        session.commit()
 
-    logging.info(f"Флаг favorites установлен в True для search_result_id: {search_result_id}")
-    return "Favorite flag set to True"
+        logging.info(f"Флаг favorites установлен в True для search_result_id: {search_result_id}")
+        return "Favorite flag set to True"
 
+    else:
+        # Обновляем запись в таблице Search_Result
+        stmt = (
+            update(Search_Result)
+            .where(
+                (Search_Result.id == search_result_id)
+            )
+            .values(favorites=False)
+        )
+        logging.info(f"SQL запрос: {stmt}")
+        session.execute(stmt)
+        session.commit()
+
+        logging.info(f"Флаг favorites установлен в False для search_result_id: {search_result_id}")
+        return "Favorite flag set to False"
 
 def set_blacklist(search_result_id):
     """
     Устанавливает флаг blacklist в True для указанного результата поиска.
     """
     logging.info(f"Начало set_blacklist с search_result_id: {search_result_id}")
-    # Обновляем запись в таблице Search_Result
-    stmt = (
-        update(Search_Result)
-        .where(
-            (Search_Result.id == search_result_id)
-        )
-        .values(blacklist=True)
-    )
-    logging.info(f"SQL запрос: {stmt}")
-    session.execute(stmt)
-    session.commit()
+    status = session.scalar(select(Search_Result).where(Search_Result.id==search_result_id))
 
-    logging.info(f"Флаг blacklist установлен в True для search_result_id: {search_result_id}")
-    return "Blacklist flag set to True"
+    if not status.blacklist:
+        if status.favorites:
+            setattr(status, "favorites", False)
+        # Обновляем запись в таблице Search_Result
+        stmt = (
+            update(Search_Result)
+            .where(
+                (Search_Result.id == search_result_id)
+            )
+            .values(blacklist=True)
+        )
+        logging.info(f"SQL запрос: {stmt}")
+        session.execute(stmt)
+        session.commit()
+
+        logging.info(f"Флаг blacklist установлен в True для search_result_id: {search_result_id}")
+        return "Blacklist flag set to True"
+    
+    else:
+        # Обновляем запись в таблице Search_Result
+        stmt = (
+            update(Search_Result)
+            .where(
+                (Search_Result.id == search_result_id)
+            )
+            .values(blacklist=False)
+        )
+        logging.info(f"SQL запрос: {stmt}")
+        session.execute(stmt)
+        session.commit()
+
+        logging.info(f"Флаг blacklist установлен в False для search_result_id: {search_result_id}")
+        return "Blacklist flag set to False"
+
+def get_favourite_list(user_id):
+    users = session.scalars(select(Search_Result).where(Search_Result.user_id==user_id, Search_Result.favorites==True)).all()
+
+    if not users:
+        return None
+
+    return [user.result_user_id for user in users]

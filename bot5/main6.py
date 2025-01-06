@@ -19,6 +19,7 @@ from db_requests import (
     get_search_results,
     set_favorite,
     set_blacklist,
+    get_favourite_list
 )
 
 load_dotenv()
@@ -367,10 +368,15 @@ def _handle_start_command(user_id):
 def _handle_favorite_button(user_id, search_result_id):
     search_results = get_search_results(user_id)
     if search_results:
-        set_favorite(search_result_id)
-        send_message_from_group(
-            user_id, "Пользователь добавлен в избранное!", keyboard=get_next_prev_keyboard(search_result_id)
-        )
+        status = set_favorite(search_result_id)
+        if status == "Favorite flag set to True":
+            send_message_from_group(
+                user_id, "Пользователь добавлен в избранное!", keyboard=get_next_prev_keyboard(search_result_id)
+            )
+        else:
+            send_message_from_group(
+                user_id, "Пользователь удален из избранного!", keyboard=get_next_prev_keyboard(search_result_id)
+            )
     else:
         send_message_from_group(
             user_id, "Не удалось добавить пользователя в избранное.", keyboard=get_next_prev_keyboard(search_result_id)
@@ -380,15 +386,32 @@ def _handle_favorite_button(user_id, search_result_id):
 def _handle_blacklist_button(user_id, search_result_id):
     search_results = get_search_results(user_id)
     if search_results:
-        set_blacklist(search_result_id)
-        send_message_from_group(
-            user_id, "Пользователь добавлен в черный список!", keyboard=get_next_prev_keyboard(search_result_id)
-        )
+        status = set_blacklist(search_result_id)
+        if status == "Blacklist flag set to True":
+            send_message_from_group(
+                user_id, "Пользователь добавлен в черный список!", keyboard=get_next_prev_keyboard(search_result_id)
+            )
+        else:
+            send_message_from_group(
+            user_id, "Пользователь удален из черного списка!", keyboard=get_next_prev_keyboard(search_result_id)
+            )
     else:
         send_message_from_group(
             user_id, "Не удалось добавить пользователя в черный список.", keyboard=get_next_prev_keyboard(search_result_id)
         )
 
+def _get_user_favourite_list(user_id, search_result_id):
+    fav_list = get_favourite_list(user_id)
+    if fav_list:
+        message = ("Твой список избранных: \n" + 
+                    "\n".join(f"vk.com/id{user_id}" for user_id in fav_list))
+        send_message_from_group(
+            user_id, message, keyboard=get_next_prev_keyboard(search_result_id)
+        )
+    else:
+        send_message_from_group(
+            user_id, "В вашем списке избранных нет пользователей", keyboard=get_next_prev_keyboard(search_result_id)
+        )
 
 def handle_message(event, vk):
     """Обрабатывает входящие сообщения и отвечает на нажатия кнопок."""
@@ -418,6 +441,7 @@ def handle_message(event, vk):
                     "prev": _handle_prev_button,
                     "favorite": _handle_favorite_button,
                     "blacklist": _handle_blacklist_button,
+                    "fav_list": _get_user_favourite_list
                 }
 
                 handler = button_handlers.get(button)

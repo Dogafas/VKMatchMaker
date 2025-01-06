@@ -66,6 +66,7 @@ def get_next_prev_keyboard(search_result_id):
             create_button("⭐ Избранное", {"button": "favorite", "search_result_id": search_result_id}, "positive"),
             create_button("🚫 Черный список", {"button": "blacklist", "search_result_id": search_result_id}, "negative"),
         ],
+        [create_button("📕 Список избранных", {"button": "fav_list", "search_result_id":search_result_id}, "primary")]
     ]
     return create_keyboard(buttons)
 
