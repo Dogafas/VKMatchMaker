@@ -63,6 +63,14 @@ def get_next_prev_keyboard():
     ]
     return create_keyboard(buttons)
 
+def get_next_keyboard():
+    """Создает клавиатуру с кнопками 'Следующий'"""
+    buttons = [
+        [
+            create_button("Следующий", {"button": "next"}, "primary"),
+        ]
+    ]
+    return create_keyboard(buttons)
 
 def get_yes_no_keyboard():
     buttons = [

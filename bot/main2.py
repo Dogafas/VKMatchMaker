@@ -9,6 +9,7 @@ from keyboards import (
     get_age_keyboard,
     get_next_prev_keyboard,
     get_yes_no_keyboard,
+    get_next_keyboard
 )
 from db_requests import (
     set_user,
@@ -332,7 +333,7 @@ def handle_message(event, vk):
                             user_id,
                             message,
                             found_user_info["attachments"],
-                            keyboard=get_next_prev_keyboard(),
+                            keyboard=get_next_keyboard(),
                         )
                         print(
                             save_search_results(

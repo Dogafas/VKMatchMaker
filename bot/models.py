@@ -10,17 +10,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(BigInteger, unique=True)
     current_index: Mapped[int] = mapped_column(BigInteger)
-
-
-class User_Search_Params(Base):
-    __tablename__ = "user_search_params"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
     sex: Mapped[str] = mapped_column(String(10), nullable=False)
     age: Mapped[str] = mapped_column(nullable=False)
     city_id: Mapped[int] = mapped_column()
-
 
 class Search_Result(Base):
     __tablename__ = "search_result"
@@ -29,3 +21,5 @@ class Search_Result(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id"))
     result_user_id: Mapped[int] = mapped_column(BigInteger)
     search_params_id: Mapped[int] = mapped_column(BigInteger)
+    favourites: Mapped[bool] = mapped_column()
+    blacklist: Mapped[bool] = mapped_column()

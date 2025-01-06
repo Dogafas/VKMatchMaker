@@ -1,5 +1,5 @@
 from session import session
-from models import User, User_Search_Params, Search_Result
+from models import User, Search_Result
 from sqlalchemy import select, update, delete, or_
 from sqlalchemy.future import select
 
@@ -17,12 +17,12 @@ def set_user(user_id):
 
 def save_user_search_params(user_id, sex, age, city_id):
     user = session.scalar(
-        select(User_Search_Params).where(User_Search_Params.user_id == user_id)
+        select(User).where(User.user_id == user_id)
     )
 
     if not user:
         session.add(
-            User_Search_Params(user_id=user_id, sex=sex, age=age, city_id=city_id)
+            User(user_id=user_id, sex=sex, age=age, city_id=city_id)
         )
         session.commit()
         return "Search params saved"
@@ -36,7 +36,7 @@ def save_user_search_params(user_id, sex, age, city_id):
 
 def get_user_search_params(user_id):
     user_search_params = session.scalar(
-        select(User_Search_Params).where(User_Search_Params.user_id == user_id)
+        select(User).where(User.user_id == user_id)
     )
 
     if not user_search_params:
@@ -62,6 +62,8 @@ def save_search_results(user_id, result_user_id, search_params_id):
                 user_id=user_id,
                 result_user_id=result_user_id,
                 search_params_id=search_params_id,
+                favourites=False,
+                blacklist=False
             )
         )
         session.commit()
@@ -93,3 +95,22 @@ def change_user_index(user_id, index):
 
     change_index.current_index = index
     session.commit()
+
+def change_favourite(user_id, search_user_id):
+    user = session.scalar(select(Search_Result).where(user_id=user_id, search_user_id=search_user_id))
+
+    if user.favourites:
+        setattr(user, 'favourites', False)
+
+    else:
+        setattr(user, 'favourites', True)
+
+def change_blacklist(user_id, search_user_id):
+    user = session.scalar(select(Search_Result).where(user_id=user_id, search_user_id=search_user_id))
+
+    if user.blacklist:
+        setattr(user, 'blacklist', False)
+
+    else:
+        setattr(user, 'blacklist', True)
+
